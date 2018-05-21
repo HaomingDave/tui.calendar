@@ -16,7 +16,7 @@
             {{/if}}
         {{else}}
             {{#each timeSlots ~}}
-                <div class="{{CSS_PREFIX}}timegrid-hour" style="height: {{@root.styles.oneHourHeight}}; color: {{color}}; font-weight: {{fontWeight}};">
+                <div class="{{CSS_PREFIX}}timegrid-hour" style="height: {{@root.styles.oneHourHeight}}; color: {{color}};">
                     <span style="{{#if hidden}}display:none{{/if}}">{{{timegridDisplayTime-tmpl this}}}</span>
                 </div>
             {{/each ~}}

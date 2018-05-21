@@ -137,6 +137,12 @@ function TimeGrid(name, options, panelElement) {
         timezones: options.timezones
     }, options.week);
 
+    if (this.options.timezones.length < 1) {
+        this.options.timezones = [{
+            timezoneOffset: Timezone.getOffset()
+        }];
+    }
+
     /**
      * Interval id for hourmarker animation.
      * @type {number}
@@ -239,9 +245,20 @@ TimeGrid.prototype._getHourmarkerViewModel = function(now, grids, range) {
     util.forEach(timezones, function(timezone) {
         var timezoneDifference = timezone.timezoneOffset + primaryOffset;
         var hourmarker = new TZDate(now);
+        var texts = [];
+        var dateDifference;
 
         hourmarker.setMinutes(hourmarker.getMinutes() + timezoneDifference);
-        hourmarkerTexts.push(datetime.format(hourmarker, 'HH:mm'));
+
+        dateDifference = hourmarker.getDate() - now.getDate();
+        if (dateDifference < 0) {
+            texts.push('[-' + Math.abs(dateDifference) + ']');
+        } else if (dateDifference > 0) {
+            texts.push('[+' + Math.abs(dateDifference) + ']');
+        }
+
+        texts.push(datetime.format(hourmarker, 'HH:mm'));
+        hourmarkerTexts.push(texts.join(''));
     });
 
     viewModel = {
@@ -273,14 +290,25 @@ TimeGrid.prototype._getTimezoneViewModel = function(currentHours, styles) {
 
     util.forEach(timezones, function(timezone, index) {
         var hourmarker = new TZDate(now);
+        var texts = [];
         var timezoneDifference;
         var timeSlots;
+        var dateDifference;
 
         timezone = timezones[timezones.length - index - 1];
         timezoneDifference = timezone.timezoneOffset + primaryOffset;
         timeSlots = getHoursLabels(opt, currentHours >= 0, timezoneDifference, styles);
 
         hourmarker.setMinutes(hourmarker.getMinutes() + timezoneDifference);
+
+        dateDifference = hourmarker.getDate() - now.getDate();
+        if (dateDifference < 0) {
+            texts.push('[-' + Math.abs(dateDifference) + ']');
+        } else if (dateDifference > 0) {
+            texts.push('[+' + Math.abs(dateDifference) + ']');
+        }
+
+        texts.push(datetime.format(hourmarker, 'HH:mm'));
 
         timezoneViewModel.unshift({
             timeSlots: timeSlots,
@@ -290,7 +318,7 @@ TimeGrid.prototype._getTimezoneViewModel = function(currentHours, styles) {
             width: width,
             left: index * width,
             isPrimary: index === timezonesLength - 1,
-            hourmarkerText: datetime.format(hourmarker, 'HH:mm')
+            hourmarkerText: texts.join('')
         });
     });
 
@@ -423,13 +451,9 @@ TimeGrid.prototype.renderStickyContainer = function(baseViewModel) {
 
     stickyContainer.innerHTML = timezoneStickyTmpl(baseViewModel);
 
-    stickyContainer.style.display = baseViewModel.timezones.length > 1 ? 'table' : 'none';
-    stickyContainer.style.position = 'absolute';
-    stickyContainer.style.top = 0;
+    stickyContainer.style.display = baseViewModel.timezones.length > 1 ? 'block' : 'none';
     stickyContainer.style.width = baseViewModel.styles.leftWidth;
     stickyContainer.style.height = baseViewModel.styles.displayTimezoneLableHeight;
-    stickyContainer.style.lineHeight = baseViewModel.styles.displayTimezoneLableHeight;
-    stickyContainer.style.textAlign = 'right';
     stickyContainer.style.borderBottom = baseViewModel.styles.leftBorderRight;
 };
 
