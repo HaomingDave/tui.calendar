@@ -1,6 +1,6 @@
 /*!
  * TOAST UI Calendar
- * @version 1.2.2 | Mon May 21 2018
+ * @version 1.2.2-past-time-color | Wed May 23 2018
  * @author NHNEnt FE Development Lab <dl_javascript@nhnent.com>
  * @license MIT
  */
