@@ -59,6 +59,10 @@ function getHoursLabels(opt, hasHourMarker, timezoneOffset, styles) {
         } else if (nowMinutes > 40) {
             nowAroundHours = nowHours + 1;
         }
+
+        if (util.isNumber(nowAroundHours)) {
+            nowAroundHours %= 24;
+        }
     }
 
     return util.map(hoursRange, function(hour, index) {
@@ -160,11 +164,17 @@ function TimeGrid(name, options, panelElement) {
      */
     this._scrolled = false;
 
-    /*
+    /**
      * cache parent's view model
      * @type {object}
      */
     this._cacheParentViewModel = null;
+
+    /**
+     * cache hoursLabels view model to render again TimeGrid
+     * @type {object}
+     */
+    this._cacheHoursLabels = null;
 
     this.attachEvent();
 }
@@ -287,6 +297,7 @@ TimeGrid.prototype._getTimezoneViewModel = function(currentHours, styles) {
     var timezoneViewModel = [];
     var width = 100 / timezonesLength;
     var now = new TZDate();
+    var backgroundColor = styles.displayTimezoneLableBackgroundColor;
 
     util.forEach(timezones, function(timezone, index) {
         var hourmarker = new TZDate(now);
@@ -295,7 +306,6 @@ TimeGrid.prototype._getTimezoneViewModel = function(currentHours, styles) {
         var timeSlots;
         var dateDifference;
 
-        timezone = timezones[timezones.length - index - 1];
         timezoneDifference = timezone.timezoneOffset + primaryOffset;
         timeSlots = getHoursLabels(opt, currentHours >= 0, timezoneDifference, styles);
 
@@ -310,15 +320,20 @@ TimeGrid.prototype._getTimezoneViewModel = function(currentHours, styles) {
 
         texts.push(datetime.format(hourmarker, 'HH:mm'));
 
-        timezoneViewModel.unshift({
+        if (index > 0) {
+            backgroundColor = styles.additionalTimezoneBackgroundColor;
+        }
+
+        timezoneViewModel.push({
             timeSlots: timeSlots,
             displayLabel: timezone.displayLabel,
             timezoneOffset: timezone.timezoneOffset,
             tooltip: timezone.tooltip || '',
             width: width,
-            left: index * width,
-            isPrimary: index === timezonesLength - 1,
-            hourmarkerText: texts.join('')
+            left: (timezones.length - index - 1) * width,
+            isPrimary: index === 0,
+            hourmarkerText: texts.join(''),
+            backgroundColor: backgroundColor
         });
     });
 
@@ -409,6 +424,7 @@ TimeGrid.prototype.render = function(viewModel) {
         scheduleLen = util.keys(timeViewModel).length;
 
     this._cacheParentViewModel = viewModel;
+    this._cacheHoursLabels = baseViewModel.hoursLabels;
 
     if (!scheduleLen) {
         return;
@@ -461,32 +477,50 @@ TimeGrid.prototype.renderStickyContainer = function(baseViewModel) {
  * Refresh hourmarker element.
  */
 TimeGrid.prototype.refreshHourmarker = function() {
-    var hourmarkers = this.hourmarkers,
-        grids = this._cacheParentViewModel ? this._cacheParentViewModel.grids : null,
-        range = this._cacheParentViewModel ? this._cacheParentViewModel.range : null,
-        viewModel = this._getHourmarkerViewModel(new TZDate(), grids, range);
+    var hourmarkers = this.hourmarkers;
+    var viewModel = this._cacheParentViewModel;
+    var hoursLabels = this._cacheHoursLabels;
+    var baseViewModel;
 
     if (!hourmarkers || !viewModel) {
         return;
     }
 
+    baseViewModel = this._getBaseViewModel(viewModel);
+
     reqAnimFrame.requestAnimFrame(function() {
-        util.forEach(hourmarkers, function(hourmarker) {
-            var todaymarker = domutil.find(config.classname('.timegrid-todaymarker'), hourmarker);
-            var hourmarkerText = domutil.find(config.classname('.timegrid-hourmarker-time'), hourmarker);
-            var timezone = domutil.closest(hourmarker, config.classname('.timegrid-timezone'));
-            var timezoneIndex = timezone ? domutil.getData(timezone, 'timezoneIndex') : 0;
+        var needsRender = false;
 
-            hourmarker.style.top = viewModel.hourmarkerTop + '%';
+        util.forEach(hoursLabels, function(hoursLabel, index) {
+            if (hoursLabel.hidden !== baseViewModel.hoursLabels[index].hidden) {
+                needsRender = true;
 
-            if (todaymarker) {
-                todaymarker.style.display = (viewModel.todaymarkerLeft >= 0) ? 'block' : 'none';
+                return false;
             }
-            if (hourmarkerText) {
-                hourmarkerText.innerHTML = viewModel.hourmarkerTexts[timezoneIndex];
-            }
+
+            return true;
         });
-    });
+
+        if (needsRender) {
+            this.render(viewModel);
+        } else {
+            util.forEach(hourmarkers, function(hourmarker) {
+                var todaymarker = domutil.find(config.classname('.timegrid-todaymarker'), hourmarker);
+                var hourmarkerText = domutil.find(config.classname('.timegrid-hourmarker-time'), hourmarker);
+                var timezone = domutil.closest(hourmarker, config.classname('.timegrid-timezone'));
+                var timezoneIndex = timezone ? domutil.getData(timezone, 'timezoneIndex') : 0;
+
+                hourmarker.style.top = baseViewModel.hourmarkerTop + '%';
+
+                if (todaymarker) {
+                    todaymarker.style.display = (baseViewModel.todaymarkerLeft >= 0) ? 'block' : 'none';
+                }
+                if (hourmarkerText) {
+                    hourmarkerText.innerHTML = baseViewModel.hourmarkerTexts[timezoneIndex];
+                }
+            });
+        }
+    }, this);
 };
 
 /**
@@ -577,6 +611,7 @@ TimeGrid.prototype._getStyles = function(theme) {
         styles.leftBorderRight = theme.week.timegridLeft.borderRight || theme.common.border;
         styles.leftFontSize = theme.week.timegridLeft.fontSize;
         styles.timezoneWidth = theme.week.timegridLeft.width;
+        styles.additionalTimezoneBackgroundColor = theme.week.timegridLeftAdditionalTimezone.backgroundColor || styles.leftBackgroundColor;
 
         styles.displayTimezoneLableHeight = theme.week.timegridLeftTimezoneLabel.height;
         styles.displayTimezoneLableBackgroundColor = theme.week.timegridLeft.backgroundColor === 'inherit' ? 'white' : theme.week.timegridLeft.backgroundColor;
