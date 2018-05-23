@@ -8440,6 +8440,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    'week.timegridLeft.borderRight': '1px solid #e5e5e5',
 	    'week.timegridLeft.fontSize': '11px',
 	    'week.timegridLeftTimezoneLabel.height': '20px',
+	    'week.timegridLeftAdditionalTimezone.backgroundColor': 'inherit',
 	
 	    'week.timegridOneHour.height': '52px',
 	    'week.timegridHalfHour.height': '26px',
@@ -12036,6 +12037,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	        } else if (nowMinutes > 40) {
 	            nowAroundHours = nowHours + 1;
 	        }
+	
+	        if (util.isNumber(nowAroundHours)) {
+	            nowAroundHours %= 24;
+	        }
 	    }
 	
 	    return util.map(hoursRange, function(hour, index) {
@@ -12137,11 +12142,17 @@ return /******/ (function(modules) { // webpackBootstrap
 	     */
 	    this._scrolled = false;
 	
-	    /*
+	    /**
 	     * cache parent's view model
 	     * @type {object}
 	     */
 	    this._cacheParentViewModel = null;
+	
+	    /**
+	     * cache hoursLabels view model to render again TimeGrid
+	     * @type {object}
+	     */
+	    this._cacheHoursLabels = null;
 	
 	    this.attachEvent();
 	}
@@ -12264,6 +12275,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    var timezoneViewModel = [];
 	    var width = 100 / timezonesLength;
 	    var now = new TZDate();
+	    var backgroundColor = styles.displayTimezoneLableBackgroundColor;
 	
 	    util.forEach(timezones, function(timezone, index) {
 	        var hourmarker = new TZDate(now);
@@ -12272,7 +12284,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	        var timeSlots;
 	        var dateDifference;
 	
-	        timezone = timezones[timezones.length - index - 1];
 	        timezoneDifference = timezone.timezoneOffset + primaryOffset;
 	        timeSlots = getHoursLabels(opt, currentHours >= 0, timezoneDifference, styles);
 	
@@ -12287,15 +12298,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	        texts.push(datetime.format(hourmarker, 'HH:mm'));
 	
-	        timezoneViewModel.unshift({
+	        if (index > 0) {
+	            backgroundColor = styles.additionalTimezoneBackgroundColor;
+	        }
+	
+	        timezoneViewModel.push({
 	            timeSlots: timeSlots,
 	            displayLabel: timezone.displayLabel,
 	            timezoneOffset: timezone.timezoneOffset,
 	            tooltip: timezone.tooltip || '',
 	            width: width,
-	            left: index * width,
-	            isPrimary: index === timezonesLength - 1,
-	            hourmarkerText: texts.join('')
+	            left: (timezones.length - index - 1) * width,
+	            isPrimary: index === 0,
+	            hourmarkerText: texts.join(''),
+	            backgroundColor: backgroundColor
 	        });
 	    });
 	
@@ -12386,6 +12402,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        scheduleLen = util.keys(timeViewModel).length;
 	
 	    this._cacheParentViewModel = viewModel;
+	    this._cacheHoursLabels = baseViewModel.hoursLabels;
 	
 	    if (!scheduleLen) {
 	        return;
@@ -12438,32 +12455,50 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * Refresh hourmarker element.
 	 */
 	TimeGrid.prototype.refreshHourmarker = function() {
-	    var hourmarkers = this.hourmarkers,
-	        grids = this._cacheParentViewModel ? this._cacheParentViewModel.grids : null,
-	        range = this._cacheParentViewModel ? this._cacheParentViewModel.range : null,
-	        viewModel = this._getHourmarkerViewModel(new TZDate(), grids, range);
+	    var hourmarkers = this.hourmarkers;
+	    var viewModel = this._cacheParentViewModel;
+	    var hoursLabels = this._cacheHoursLabels;
+	    var baseViewModel;
 	
 	    if (!hourmarkers || !viewModel) {
 	        return;
 	    }
 	
+	    baseViewModel = this._getBaseViewModel(viewModel);
+	
 	    reqAnimFrame.requestAnimFrame(function() {
-	        util.forEach(hourmarkers, function(hourmarker) {
-	            var todaymarker = domutil.find(config.classname('.timegrid-todaymarker'), hourmarker);
-	            var hourmarkerText = domutil.find(config.classname('.timegrid-hourmarker-time'), hourmarker);
-	            var timezone = domutil.closest(hourmarker, config.classname('.timegrid-timezone'));
-	            var timezoneIndex = timezone ? domutil.getData(timezone, 'timezoneIndex') : 0;
+	        var needsRender = false;
 	
-	            hourmarker.style.top = viewModel.hourmarkerTop + '%';
+	        util.forEach(hoursLabels, function(hoursLabel, index) {
+	            if (hoursLabel.hidden !== baseViewModel.hoursLabels[index].hidden) {
+	                needsRender = true;
 	
-	            if (todaymarker) {
-	                todaymarker.style.display = (viewModel.todaymarkerLeft >= 0) ? 'block' : 'none';
+	                return false;
 	            }
-	            if (hourmarkerText) {
-	                hourmarkerText.innerHTML = viewModel.hourmarkerTexts[timezoneIndex];
-	            }
+	
+	            return true;
 	        });
-	    });
+	
+	        if (needsRender) {
+	            this.render(viewModel);
+	        } else {
+	            util.forEach(hourmarkers, function(hourmarker) {
+	                var todaymarker = domutil.find(config.classname('.timegrid-todaymarker'), hourmarker);
+	                var hourmarkerText = domutil.find(config.classname('.timegrid-hourmarker-time'), hourmarker);
+	                var timezone = domutil.closest(hourmarker, config.classname('.timegrid-timezone'));
+	                var timezoneIndex = timezone ? domutil.getData(timezone, 'timezoneIndex') : 0;
+	
+	                hourmarker.style.top = baseViewModel.hourmarkerTop + '%';
+	
+	                if (todaymarker) {
+	                    todaymarker.style.display = (baseViewModel.todaymarkerLeft >= 0) ? 'block' : 'none';
+	                }
+	                if (hourmarkerText) {
+	                    hourmarkerText.innerHTML = baseViewModel.hourmarkerTexts[timezoneIndex];
+	                }
+	            });
+	        }
+	    }, this);
 	};
 	
 	/**
@@ -12554,6 +12589,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	        styles.leftBorderRight = theme.week.timegridLeft.borderRight || theme.common.border;
 	        styles.leftFontSize = theme.week.timegridLeft.fontSize;
 	        styles.timezoneWidth = theme.week.timegridLeft.width;
+	        styles.additionalTimezoneBackgroundColor = theme.week.timegridLeftAdditionalTimezone.backgroundColor || styles.leftBackgroundColor;
 	
 	        styles.displayTimezoneLableHeight = theme.week.timegridLeftTimezoneLabel.height;
 	        styles.displayTimezoneLableBackgroundColor = theme.week.timegridLeft.backgroundColor === 'inherit' ? 'white' : theme.week.timegridLeft.backgroundColor;
@@ -13542,7 +13578,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var Handlebars = __webpack_require__(8);
 	module.exports = (Handlebars['default'] || Handlebars).template({"1":function(container,depth0,helpers,partials,data) {
-	    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=helpers.helperMissing, alias3="function", alias4=container.escapeExpression, alias5=container.lambda;
+	    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=helpers.helperMissing, alias3="function", alias4=container.escapeExpression;
 	
 	  return "<div class=\""
 	    + alias4(((helper = (helper = helpers.CSS_PREFIX || (depth0 != null ? depth0.CSS_PREFIX : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"CSS_PREFIX","hash":{},"data":data}) : helper)))
@@ -13553,9 +13589,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	    + "%; left: "
 	    + alias4(((helper = (helper = helpers.left || (depth0 != null ? depth0.left : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"left","hash":{},"data":data}) : helper)))
 	    + "%; border-right: "
-	    + alias4(alias5(((stack1 = ((stack1 = (data && data.root)) && stack1.styles)) && stack1.leftBorderRight), depth0))
+	    + alias4(container.lambda(((stack1 = ((stack1 = (data && data.root)) && stack1.styles)) && stack1.leftBorderRight), depth0))
 	    + "; background-color: "
-	    + alias4(alias5(((stack1 = ((stack1 = (data && data.root)) && stack1.styles)) && stack1.leftBackgroundColor), depth0))
+	    + alias4(((helper = (helper = helpers.backgroundColor || (depth0 != null ? depth0.backgroundColor : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"backgroundColor","hash":{},"data":data}) : helper)))
 	    + ";\" >\n"
 	    + ((stack1 = helpers["if"].call(alias1,(depth0 != null ? depth0.isPrimary : depth0),{"name":"if","hash":{},"fn":container.program(2, data, 0),"inverse":container.program(8, data, 0),"data":data})) != null ? stack1 : "")
 	    + "        </div>\n";
@@ -13616,6 +13652,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	    + alias4(container.lambda(((stack1 = ((stack1 = (data && data.root)) && stack1.styles)) && stack1.oneHourHeight), depth0))
 	    + "; color: "
 	    + alias4(((helper = (helper = helpers.color || (depth0 != null ? depth0.color : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"color","hash":{},"data":data}) : helper)))
+	    + "; font-weight: "
+	    + alias4(((helper = (helper = helpers.fontWeight || (depth0 != null ? depth0.fontWeight : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"fontWeight","hash":{},"data":data}) : helper)))
 	    + ";\">\n                    <span style=\""
 	    + ((stack1 = helpers["if"].call(alias1,(depth0 != null ? depth0.hidden : depth0),{"name":"if","hash":{},"fn":container.program(4, data, 0),"inverse":container.noop,"data":data})) != null ? stack1 : "")
 	    + "\">"
@@ -13740,7 +13778,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	    + "timegrid-timezone-label-cell\" data-timezone=\""
 	    + alias4(((helper = (helper = helpers.displayLabel || (depth0 != null ? depth0.displayLabel : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"displayLabel","hash":{},"data":data}) : helper)))
 	    + "\" style=\"background-color: "
-	    + alias4(alias5(((stack1 = ((stack1 = (data && data.root)) && stack1.styles)) && stack1.displayTimezoneLableBackgroundColor), depth0))
+	    + alias4(((helper = (helper = helpers.backgroundColor || (depth0 != null ? depth0.backgroundColor : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"backgroundColor","hash":{},"data":data}) : helper)))
 	    + "; height: 100%; width: "
 	    + alias4(((helper = (helper = helpers.width || (depth0 != null ? depth0.width : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"width","hash":{},"data":data}) : helper)))
 	    + "%; left: "
